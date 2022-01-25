@@ -16,18 +16,17 @@ end
 function love.load()
     -- Background, Fonts and Text
     love.graphics.setBackgroundColor(40/255, 42/255,54/255)
-
     mainFont = love.graphics.newFont("JetBrains_Mono.ttf", 12)
     love.graphics.setFont(mainFont)
-
     text = love.graphics.newText(love.graphics.getFont())
+    --
 
     -- Constants
     dim = {
         width = love.graphics.getWidth(),
         height = love.graphics.getHeight()
     }
-    absOrg = {x=dim.width/2, y=dim.height/2} -- Absolute coordinates of the relative Origin
+    relOrg = {x=dim.width/2, y=dim.height/2} -- Absolute coordinates of the relative Origin
     axisSeg = { -- The lenght of the segment between numbers
         x = {min=50, max=100, step=1, curr=50},
         y = {min=50, max=100, step=1, curr=50}
@@ -35,22 +34,22 @@ function love.load()
     segLen = {x=5, y=5} -- The lenght of each "number segment"
 
     winPadding = { -- Absolute coordinates of the Frame Borders
-        x0=100, xf=50, y0=80, yf=30,
+        left=200, right=200, top=150, bottom=150,
     }
 
     updateStuff = function()
         absFrame = { -- Absolute coordinates of the Frame Borders
-            x0 = winPadding.x0 ,
-            xf = dim.width - winPadding.xf ,
-            y0 = winPadding.y0 ,
-            yf = dim.height - winPadding.yf ,
+            x0 = winPadding.left ,
+            xf = dim.width - winPadding.right ,
+            y0 = winPadding.top ,
+            yf = dim.height - winPadding.bottom ,
         }
 
         relFrame = { -- Relative coordinates of the Frame Borders
-            x0 = winPadding.x0 - absOrg.x ,
-            xf = dim.width - winPadding.xf - absOrg.x ,
-            y0 = winPadding.y0 - absOrg.y ,
-            yf = dim.height - winPadding.yf - absOrg.y ,
+            x0 = winPadding.left - relOrg.x ,
+            xf = dim.width - winPadding.right - relOrg.x ,
+            y0 = winPadding.top - relOrg.y ,
+            yf = dim.height - winPadding.bottom - relOrg.y ,
         }
 
         segNum = { -- The number of "number segments"
@@ -79,7 +78,7 @@ end
 
 -- USEFUL FUNCTIONS
 
-function isInAbsFrame(axis, arg1, arg2, arg3) -- arg(1|2|3) could be and a coordinate or a "Margin Error"
+function isInAbsFrame(axis, arg1, arg2, arg3) -- arg(1|2|3) could be an axis, a coordinate or a "Margin Error"
     local mrgerr
 
     if axis == "x" then
@@ -131,31 +130,40 @@ function isInRelFrame(axis, arg1, arg2, arg3) -- this are the relative coors
 
 end
 
--- MOUSE CALLBACK
+
+-- RESIZE CALLBACK
 function love.resize(w, h)
     dim.width, dim.height = w, h
     updateStuff()
 end
 
-function axisZoom(axisSeg, y)
-    local newXcurr = axisSeg.curr + y*2
 
-    if newXcurr > axisSeg.max then
-        axisSeg.curr = axisSeg.min + newXcurr - axisSeg.max
-        axisSeg.step = axisSeg.step/2
-    elseif newXcurr < axisSeg.min then
-        axisSeg.curr = axisSeg.max - (axisSeg.min - newXcurr)
-        axisSeg.step = axisSeg.step*2
+-- ZOOM IMPLEMENTATION
+function axisZoom(axis, coor)
+    tabl = axisSeg[axis]
+    
+    local newXcurr = tabl.curr + coor*2
+
+    if newXcurr > tabl.max then
+        tabl.curr = tabl.min + newXcurr - tabl.max
+        tabl.step = tabl.step/2
+    elseif newXcurr < tabl.min then
+        tabl.curr = tabl.max - (tabl.min - newXcurr)
+        tabl.step = tabl.step*2
     else
-        axisSeg.curr = newXcurr
+        tabl.curr = newXcurr
     end
 end
 
-function love.wheelmoved(x, y)
-    axisZoom(axisSeg.x, y)
-    axisZoom(axisSeg.y, y)
+function love.wheelmoved(x, y) 
+    -- y is the direction of the mousewheel, x is like a horizontal wheel
+    axisZoom("x", y)
+    axisZoom("y", y)
+    updateStuff()
 end
 
+
+-- MOUSE CALLBACK
 function love.mousepressed(x, y, button, istouch, presses)
     print(button)
     if button == 1 then
@@ -169,7 +177,7 @@ function love.mousemoved(x, y, dx, dy, istouch)
     if action == nil then return end
     if isInAbsFrame("both", x,y) then
         if action == "updateAbsOrg" then
-            absOrg.x, absOrg.y = absOrg.x + dx, absOrg.y + dy
+            relOrg.x, relOrg.y = relOrg.x + dx, relOrg.y + dy
             updateStuff()
         end
     else action = nil end
@@ -179,38 +187,36 @@ function love.mousereleased(x, y, button, istouch, presses)
     action = nil
 end
 
--- DRAW STUFF
 
+-- AXIS BLITING
 function drawAxisX()
     love.graphics.setColor(1,1,1)
             
     -- X axis
     if isInRelFrame("y", 0) then love.graphics.line(relFrame.x0, 0, relFrame.xf, 0) end
     
-    -- X segments and its numbres
-    if relFrame.y0 < segLen.x and -segLen.x < relFrame.yf then
-        for _, endCoor in ipairs({segNum.x0, segNum.xf}) do
-            local k = endCoor > 0 and 1 or -1
-            for i=0, endCoor, k do
-                if i == 0 then goto continue end
-                
-                local xcoor = i*axisSeg.x.curr
-                text:set(tostring(i*axisSeg.x.step))
-                
-                -- blit the segments
-                love.graphics.line(xcoor, -segLen.x, xcoor, segLen.x)
-                -- blit the numbers
-                if true then -- showNums is the boolean
-                    love.graphics.print(
-                        tostring(i*axisSeg.x.step),
-                        xcoor - text:getWidth()/2,
-                        segLen.x
-                    )
-                end
-                ::continue::
+    -- X segments and its numbers
+    if isInRelFrame("y", 0, segLen.x + mainFont:getHeight()) then
+        for i=segNum.x0, segNum.xf+1, 1 do
+            
+            if i == 0 then goto continue end
+            
+            local xcoor = i*axisSeg.x.curr
+            text:set(tostring(i*axisSeg.x.step))
+            
+            -- blit the segments
+            love.graphics.line(xcoor, -segLen.x, xcoor, segLen.x)
+            -- blit the numbers
+            if true then -- showNums is the boolean
+                love.graphics.print(
+                    tostring(i*axisSeg.x.step),
+                    xcoor - text:getWidth()/2,
+                    segLen.x
+                )
             end
+            ::continue::
         end
-    else print("Not drawing x")
+    
     end
 end
 
@@ -219,29 +225,23 @@ function drawAxisY()
     if isInRelFrame("x", 0) then love.graphics.line(0, relFrame.y0, 0, relFrame.yf) end
             
     -- Y segments and its numbers
-    if relFrame.x0 < segLen.y and -segLen.y < relFrame.xf then  
-        for _, endCoor in ipairs({segNum.y0, segNum.yf}) do
-            local k = endCoor > 0 and 1 or -1
-            for i=0, endCoor, k do
-                if i == 0 then goto continue end
-                
-                local ycoor = i*axisSeg.y.curr
-                text:set(tostring(-i*axisSeg.x.step))
-                
-                -- blit the segments
-                love.graphics.line(-segLen.y, ycoor, segLen.y, ycoor)
-                -- blit the numbers
-                if true then -- bool is showNums
-                    love.graphics.print(
-                        tostring(-i*axisSeg.x.step),
-                        -segLen.y-text:getWidth() -3 ,
-                        ycoor - text:getHeight()/2
-                    )
-                end
-                ::continue::
-            end
+    for i=segNum.y0, segNum.yf+1, 1 do 
+        if i == 0 then goto continue end
+        
+        local ycoor = i*axisSeg.y.curr
+        text:set(tostring(-i*axisSeg.x.step))
+        
+        if isInRelFrame("x", 0, segLen.y + text:getWidth()) then 
+            -- blit the segments
+            love.graphics.line(-segLen.y, ycoor, segLen.y, ycoor)
+            -- blit the numbers
+            love.graphics.print(
+                tostring(-i*axisSeg.x.step),
+                -segLen.y-text:getWidth() -3 ,
+                ycoor - text:getHeight()/2
+            )
         end
-    else print("Not drawing Y")
+        ::continue::
     end
 end
 
@@ -303,10 +303,11 @@ function drawFunc(func)
     end
 end
 
+
+-- LOVE.DRAW
 function love.draw()
-    -- Draw the scene at an offset of relx, rely:
     love.graphics.push()
-    love.graphics.translate(absOrg.x, absOrg.y)
+    love.graphics.translate(relOrg.x, relOrg.y) -- Draw the scene at an offset of relOrg.x, relOrg.y
 
         -- Draw a Frame
         love.graphics.setColor(1,1,1)
@@ -319,9 +320,9 @@ function love.draw()
 
 
         -- Each pixel touched by the func will have stencil value set to 1, the rest will be 0.
-        love.graphics.stencil(stencilFunc, "replace", 1)
+        -- love.graphics.stencil(stencilFunc, "replace", 1)
         -- Only allow rendering on pixels which have a stencil value greater than 0.
-        love.graphics.setStencilTest("greater", 0)           
+        -- love.graphics.setStencilTest("greater", 0)           
         
             drawAxisX()
             drawAxisY()
@@ -329,14 +330,12 @@ function love.draw()
             -- drawFunc(func2)
         
         -- restore rendering outside stencil function
-        love.graphics.setStencilTest()
+        -- love.graphics.setStencilTest()
 
-
-    -- restores coordinate system to the one of the previous push()
-    love.graphics.pop()
+    love.graphics.pop() -- restores coordinate system to the one of the previous push()
 
     -- Draw relative coors
     love.graphics.setColor(1,1,1)
-    love.graphics.print(absOrg.x, 30, 30)
-    love.graphics.print(absOrg.y, 80, 30)
+    love.graphics.print(relOrg.x, 30, 30)
+    love.graphics.print(relOrg.y, 80, 30)
 end
