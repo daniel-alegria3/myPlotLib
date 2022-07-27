@@ -1,5 +1,5 @@
 # myPlotLib
-Personal project to plot graphs in lua
+Personal project to plot graphs and learn lua
 
 # Dependencies
 Love2D game frameword is needed. Get it at (https://love2d.org/)
